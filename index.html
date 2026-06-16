@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<title>Interactive Organization Chart</title>
+<style>
+  /* Basic layout styling */
+  body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    display: flex; 
+    flex-direction: column; 
+    height: 100vh; 
+    margin: 0; 
+    background-color: #f4f6f8; 
+  }
+  
+  #toolbar { 
+    padding: 15px 20px; 
+    background: #ffffff; 
+    border-bottom: 1px solid #ddd; 
+    display: flex; 
+    gap: 10px; 
+    flex-wrap: wrap; 
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    z-index: 10;
+  }
+  
+  #chart-container { 
+    flex: 1; 
+    overflow: auto; 
+    padding: 40px; 
+    display: flex; 
+    justify-content: center; 
+    align-items: flex-start;
+  }
+  
+  /* Tree hierarchy connectors */
+  .tree ul { 
+    padding-top: 20px; 
+    position: relative; 
+    display: flex; 
+    justify-content: center; 
+    padding-left: 0; 
+  }
+  .tree li { 
+    text-align: center; 
+    list-style-type: none; 
+    position: relative; 
+    padding: 20px 5px 0 5px; 
+  }
+  .tree li::before, .tree li::after { 
+    content: ''; 
+    position: absolute; 
+    top: 0; 
+    right: 50%; 
+    border-top: 2px solid #a0a0a0; 
+    width: 50%; 
+    height: 20px; 
+  }
+  .tree li::after { 
+    right: auto; 
+    left: 50%; 
+    border-left: 2px solid #a0a0a0; 
+  }
+  .tree li:only-child::after, .tree li:only-child::before { 
+    display: none; 
+  }
+  .tree li:only-child { 
+    padding-top: 0; 
+  }
+  .tree li:first-child::before, .tree li:last-child::after { 
+    border: 0 none; 
+  }
+  .tree li:last-child::before { 
+    border-right: 2px solid #a0a0a0; 
+    border-radius: 0 5px 0 0; 
+  }
+  .tree li:first-child::after { 
+    border-radius: 5px 0 0 0; 
+  }
+  .tree ul ul::before { 
+    content: ''; 
+    position: absolute; 
+    top: 0; 
+    left: 50%; 
+    border-left: 2px solid #a0a0a0; 
+    width: 0; 
+    height: 20px; 
+    margin-left: -1px; 
+  }
+  
+  /* Individual Cards */
+  .node { 
+    border: 1px solid #cbd5e1; 
+    padding: 15px 10px; 
+    display: inline-block; 
+    border-radius: 8px; 
+    background: #ffffff; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+    width: 160px; 
+    cursor: grab; 
+    text-align: center; 
+    position: relative; 
+    transition: transform 0.1s, box-shadow 0.2s;
+  }
+  .node:hover {
+    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+  }
+  .node:active { 
+    cursor: grabbing; 
+    transform: scale(0.98);
+  }
+  .node.drag-over { 
+    border-color: #3b82f6; 
+    background-color: #eff6ff; 
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.3); 
+  }
+  
+  /* Fallback silhouette icon styling */
+  .node .avatar-box {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    margin-bottom: 8px;
+    margin-left: auto;
+    margin-right: auto;
+    background-color: #e2e8f0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .node img { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+  }
+  .node .silhouette {
+    width: 40px;
+    height: 40px;
+    fill: #94a3b8;
+  }
+  
+  .node h4 { 
+    margin: 5px 0 2px 0; 
+    font-size: 15px; 
+    color: #1e293b; 
+  }
+  .node p.title { 
+    margin: 0 0 8px 0; 
+    font-size: 12px; 
+    color: #3b82f6; 
+    font-weight: 600; 
+  }
+  .node p.bio { 
+    margin: 0; 
+    font-size: 11px; 
+    color: #64748b; 
+    line-height: 1.3;
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    display: -webkit-box; 
+    -webkit-line-clamp: 3; 
+    -webkit-box-orient: vertical; 
+  }
+  
+  /* Hover Control Buttons on Cards */
+  .delete-btn { 
+    position: absolute; 
+    top: -8px; 
+    right: -8px; 
+    background: #ef4444; 
+    color: white; 
+    border: none; 
+    border-radius: 50%; 
+    width: 24px; 
+    height: 24px; 
+    font-size: 14px; 
+    font-weight: bold;
+    cursor: pointer; 
+    display: none; 
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .edit-btn {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .node:hover .delete-btn, .node:hover .edit-btn { 
+    display: flex; 
+  }
+  
+  /* Toolbar controls & Forms */
+  input, select, textarea, button { 
+    padding: 8px 12px; 
+    border: 1px solid #cbd5e1; 
+    border-radius: 6px; 
+    font-size: 14px; 
+    outline: none;
+    box-sizing: border-box;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #3b82f6;
+  }
+  button { 
+    background: #3b82f6; 
+    color: white; 
+    cursor: pointer; 
+    border: none; 
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+  button:hover { 
+    background: #2563eb; 
+  }
+  .btn-green {
+    background: #10b981;
+  }
+  .btn-green:hover {
+    background: #059669;
+  }
+  .btn-sec {
+    background: #64748b;
+  }
+  .btn-sec:hover {
+    background: #475569;
+  }
+  .btn-danger {
+    background: #ef4444;
+  }
+  .btn-danger:hover {
+    background: #dc2626;
+  }
+  .divider {
+    border-left: 1px solid #cbd5e1;
+    height: 30px;
+    margin: 0 10px;
+  }
+
+  /* Edit Modal Dialog */
+  dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 25px;
+    width: 320px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  }
+  dialog::backdrop {
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(2px);
+  }
+  .dialog-group {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+  }
+  .dialog-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 5px;
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <strong>Add Member:</strong>
+  <input type="text" id="name" placeholder="Full Name" required="">
+  <input type="text" id="position" placeholder="Position" required="">
+  <input type="text" id="pic" placeholder="Image URL (Optional)">
+  <input type="text" id="bio" placeholder="Mini Bio (Optional)">
+  <select id="manager"><option value="">No Manager (Root)</option><option value="2">Maj. Gen. Darren Cole (Commander, 21st Air Force)</option><option value="gdevu0d95">Lt. Gen. Rebecca J. Sonkiss (Commander, Air Mobility Command)</option><option value="5zyy9hyyp">Col. Justin Ballinger (Commander, 621st Contingency Response Wing)</option><option value="rwn0omfb0">Col. Sarah Kaiser (Commander, 621st Air Mobility Advisor Group)</option><option value="sle8yk5xi">Maj. Gen. Charles Bolton (Commander 18th Air Force)</option><option value="y1t3u1gu3">Gen. Kenneth Wilsbach (Chief of Staff of the Air Force)</option><option value="4xsj3dnn8">President Donald Trump (Commander in Chief)</option><option value="j9s7lrdvm">Pete Hegseth (Secretary of Defense)</option><option value="an9ktan8i">Dr. Troy Meink (Secretary of the Air Force)</option><option value="qhr4c2mz2">Daniel Driscoll (Secretary of the Army)</option><option value="1wpik36u7">Col. Jessica Regni (Commander, 62d Airlift Wing)</option><option value="ned5l8rna">Col. Brian Epperson (Commander, 92nd Air Refueling Wing)</option><option value="gkfsgkesy">Gen. Ronald P. Clark (Commander, US Army Pacific Command)</option><option value="jwl7ih7cw">Gen. Christopher LaNeve (Chif of Staff of the Army)</option><option value="3ly55jo88">Lt. Gen. Matthew W. McFarlane (Commander, I Corps)</option><option value="4xdmr0i41">Brig. Gen. Michele A. Lo Bianco (Commander, 618th Air Operations Center)</option><option value="3htfap3no">Brig. Gen. Derek M. Salmi (Director, Air Mobility Command A3/10)</option><option value="iqj92qzac">Col. Bret Echard (Commander, 19th Airlift Wing)</option></select>
+  <button onclick="addNode()">Add</button>
+
+  <div class="divider"></div>
+
+  <!-- Hardcoded HTML export feature -->
+  <button class="btn-green" onclick="exportSelfContainedHTML()">Export Self-Contained HTML</button>
+  <button class="btn-sec" onclick="exportJSON()">Backup JSON</button>
+  <button class="btn-sec" onclick="triggerImport()">Restore Backup</button>
+  <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importJSON(event)">
+  <button class="btn-danger" onclick="resetToDemo()">Reset</button>
+</div>
+
+<div id="chart-container" class="tree">
+  <div id="org-chart"><ul><li><div class="node" draggable="true" data-id="4xsj3dnn8"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://tile.loc.gov/storage-services/service/pnp/ppbd/11600/11614_150px.jpg"></div><h4>President Donald Trump</h4><p class="title">Commander in Chief</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="j9s7lrdvm"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://d1ldvf68ux039x.cloudfront.net/thumbs/photos/2501/8844545/1000w_q95.jpg"></div><h4>Pete Hegseth</h4><p class="title">Secretary of Defense</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="an9ktan8i"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2025/May/27/2003724596/1200/1200/0/250527-F-AB123-1001.JPG"></div><h4>Dr. Troy Meink</h4><p class="title">Secretary of the Air Force</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="y1t3u1gu3"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2025/Nov/12/2003819727/1200/1200/0/251112-F-AF000-1001.JPG"></div><h4>Gen. Kenneth Wilsbach</h4><p class="title">Chief of Staff of the Air Force</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="gdevu0d95"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2024/Oct/07/2003559916/1200/1200/0/241007-F-F3200-001.JPG"></div><h4>Lt. Gen. Rebecca J. Sonkiss</h4><p class="title">Commander, Air Mobility Command</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="2"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2022/Sep/13/2003075323/1200/1200/0/220913-F-AF999-0011.JPG"></div><h4>Maj. Gen. Darren Cole</h4><p class="title">Commander, 21st Air Force</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="5zyy9hyyp"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://tse1.mm.bing.net/th/id/OIP.iwGb7uvR5gmgRf2J9TpgCAHaJP?pid=ImgDet&amp;w=474&amp;h=591&amp;rs=1&amp;o=7&amp;rm=3"></div><h4>Col. Justin Ballinger</h4><p class="title">Commander, 621st Contingency Response Wing</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="rwn0omfb0"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://tse4.mm.bing.net/th/id/OIP.UNaAtGpbGxlHAAqRm1aHKgHaJQ?pid=ImgDet&amp;w=474&amp;h=592&amp;rs=1&amp;o=7&amp;rm=3"></div><h4>Col. Sarah Kaiser</h4><p class="title">Commander, 621st Air Mobility Advisor Group</p><p class="bio">ADCON</p></div></li></ul></li><li><div class="node" draggable="true" data-id="iqj92qzac"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2025/Jul/08/2003749565/1200/1200/0/250708-F-BE660-0001.JPG"></div><h4>Col. Bret Echard</h4><p class="title">Commander, 19th Airlift Wing</p><p class="bio">Tim's Flying TACON</p></div></li></ul></li><li><div class="node" draggable="true" data-id="sle8yk5xi"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2024/Oct/15/2003565081/1200/1200/0/241015-F-AF000-1746.JPG"></div><h4>Maj. Gen. Charles Bolton</h4><p class="title">Commander 18th Air Force</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="1wpik36u7"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2025/Jul/29/2003763580/1200/1200/0/250729-F-VE343-3001.JPG"></div><h4>Col. Jessica Regni</h4><p class="title">Commander, 62d Airlift Wing</p><p class="bio">Chris' Flying TACON</p></div></li><li><div class="node" draggable="true" data-id="ned5l8rna"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2026/Jun/15/2003948664/1200/1200/0/260615-F-F3205-1001.JPG"></div><h4>Col. Brian Epperson</h4><p class="title">Commander, 92nd Air Refueling Wing</p><p class="bio">Matt's Flying TACON</p></div></li></ul></li><li><div class="node" draggable="true" data-id="4xdmr0i41"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2026/Jun/08/2003945639/1200/1200/0/260608-F-DJ189-1001.JPG"></div><h4>Brig. Gen. Michele A. Lo Bianco</h4><p class="title">Commander, 618th Air Operations Center</p><p class="bio">TACON</p></div></li><li><div class="node" draggable="true" data-id="3htfap3no"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2023/Dec/21/2003364296/1200/1200/0/211223-F-AF000-0001.JPG"></div><h4>Brig. Gen. Derek M. Salmi</h4><p class="title">Director, Air Mobility Command A3/10</p><p class="bio">OPCON</p></div></li></ul></li></ul></li></ul></li><li><div class="node" draggable="true" data-id="qhr4c2mz2"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://api.army.mil/e2/c/images/2025/08/22/322b9b68/medium-leader.jpg"></div><h4>Daniel Driscoll</h4><p class="title">Secretary of the Army</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="jwl7ih7cw"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://us-central1-menlo-view.menlosecurity.com/c/0/i/aHR0cHM6Ly91cGxvYWQud2lraW1lZGlhLm9yZy93aWtpcGVkaWEvY29tbW9ucy90aHVtYi9hL2E4L0dFTl9DaHJpc3RvcGhlcl9DLl9MYU5ldmUuanBnLzI1MHB4LUdFTl9DaHJpc3RvcGhlcl9DLl9MYU5ldmUuanBn"></div><h4>Gen. Christopher LaNeve</h4><p class="title">Chif of Staff of the Army</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="gkfsgkesy"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://media.defense.gov/2024/Nov/08/2003581262/600/400/0/241023-D-IF881-3002.JPG"></div><h4>Gen. Ronald P. Clark</h4><p class="title">Commander, US Army Pacific Command</p><p class="bio"></p></div><ul><li><div class="node" draggable="true" data-id="3ly55jo88"><button class="delete-btn" title="Remove Member">×</button><button class="edit-btn" title="Edit Member">✏️</button><div class="avatar-box"><img src="https://api.army.mil/e2/c/images/2025/01/23/fe1e5a39/max1200.jpg"></div><h4>Lt. Gen. Matthew W. McFarlane</h4><p class="title">Commander, I Corps</p><p class="bio">Supported User</p></div></li></ul></li></ul></li></ul></li></ul></li></ul></li></ul></div>
+</div>
+
+<!-- Native Edit Dialog Modal -->
+<dialog id="editDialog">
+  <h3 style="margin: 0 0 15px 0; color: #1e293b;">Edit Member Details</h3>
+  <input type="hidden" id="edit-id" value="ned5l8rna">
+  
+  <div class="dialog-group">
+    <label for="edit-name">Name</label>
+    <input type="text" id="edit-name" required="">
+  </div>
+  
+  <div class="dialog-group">
+    <label for="edit-position">Position</label>
+    <input type="text" id="edit-position" required="">
+  </div>
+  
+  <div class="dialog-group">
+    <label for="edit-pic">Image URL</label>
+    <input type="text" id="edit-pic" placeholder="Leave blank for silhouette">
+  </div>
+  
+  <div class="dialog-group">
+    <label for="edit-bio">Mini Bio</label>
+    <textarea id="edit-bio" rows="3" placeholder="A short description..."></textarea>
+  </div>
+  
+  <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+    <button class="btn-sec" onclick="closeEditModal()">Cancel</button>
+    <button class="btn-green" onclick="saveNodeEdit()">Save Changes</button>
+  </div>
+</dialog>
+
+<script>
+  // Default dataset embedded directly in the script.
+  const defaultEmbeddedData = [
+  {
+    "id": "2",
+    "name": "Maj. Gen. Darren Cole",
+    "position": "Commander, 21st Air Force",
+    "pic": "https://media.defense.gov/2022/Sep/13/2003075323/1200/1200/0/220913-F-AF999-0011.JPG",
+    "bio": "",
+    "managerId": "gdevu0d95"
+  },
+  {
+    "id": "gdevu0d95",
+    "name": "Lt. Gen. Rebecca J. Sonkiss",
+    "position": "Commander, Air Mobility Command",
+    "pic": "https://media.defense.gov/2024/Oct/07/2003559916/1200/1200/0/241007-F-F3200-001.JPG",
+    "bio": "",
+    "managerId": "y1t3u1gu3"
+  },
+  {
+    "id": "5zyy9hyyp",
+    "name": "Col. Justin Ballinger",
+    "position": "Commander, 621st Contingency Response Wing",
+    "pic": "https://tse1.mm.bing.net/th/id/OIP.iwGb7uvR5gmgRf2J9TpgCAHaJP?pid=ImgDet&w=474&h=591&rs=1&o=7&rm=3",
+    "bio": "",
+    "managerId": "2"
+  },
+  {
+    "id": "rwn0omfb0",
+    "name": "Col. Sarah Kaiser",
+    "position": "Commander, 621st Air Mobility Advisor Group",
+    "pic": "https://tse4.mm.bing.net/th/id/OIP.UNaAtGpbGxlHAAqRm1aHKgHaJQ?pid=ImgDet&w=474&h=592&rs=1&o=7&rm=3",
+    "bio": "ADCON",
+    "managerId": "5zyy9hyyp"
+  },
+  {
+    "id": "sle8yk5xi",
+    "name": "Maj. Gen. Charles Bolton",
+    "position": "Commander 18th Air Force",
+    "pic": "https://media.defense.gov/2024/Oct/15/2003565081/1200/1200/0/241015-F-AF000-1746.JPG",
+    "bio": "",
+    "managerId": "gdevu0d95"
+  },
+  {
+    "id": "y1t3u1gu3",
+    "name": "Gen. Kenneth Wilsbach",
+    "position": "Chief of Staff of the Air Force",
+    "pic": "https://media.defense.gov/2025/Nov/12/2003819727/1200/1200/0/251112-F-AF000-1001.JPG",
+    "bio": "",
+    "managerId": "an9ktan8i"
+  },
+  {
+    "id": "4xsj3dnn8",
+    "name": "President Donald Trump",
+    "position": "Commander in Chief",
+    "pic": "https://tile.loc.gov/storage-services/service/pnp/ppbd/11600/11614_150px.jpg",
+    "bio": "",
+    "managerId": null
+  },
+  {
+    "id": "j9s7lrdvm",
+    "name": "Pete Hegseth",
+    "position": "Secretary of Defense",
+    "pic": "https://d1ldvf68ux039x.cloudfront.net/thumbs/photos/2501/8844545/1000w_q95.jpg",
+    "bio": "",
+    "managerId": "4xsj3dnn8"
+  },
+  {
+    "id": "an9ktan8i",
+    "name": "Dr. Troy Meink",
+    "position": "Secretary of the Air Force",
+    "pic": "https://media.defense.gov/2025/May/27/2003724596/1200/1200/0/250527-F-AB123-1001.JPG",
+    "bio": "",
+    "managerId": "j9s7lrdvm"
+  },
+  {
+    "id": "qhr4c2mz2",
+    "name": "Daniel Driscoll",
+    "position": "Secretary of the Army",
+    "pic": "https://api.army.mil/e2/c/images/2025/08/22/322b9b68/medium-leader.jpg",
+    "bio": "",
+    "managerId": "j9s7lrdvm"
+  },
+  {
+    "id": "1wpik36u7",
+    "name": "Col. Jessica Regni",
+    "position": "Commander, 62d Airlift Wing",
+    "pic": "https://media.defense.gov/2025/Jul/29/2003763580/1200/1200/0/250729-F-VE343-3001.JPG",
+    "bio": "Chris' Flying TACON",
+    "managerId": "sle8yk5xi"
+  },
+  {
+    "id": "ned5l8rna",
+    "name": "Col. Brian Epperson",
+    "position": "Commander, 92nd Air Refueling Wing",
+    "pic": "https://media.defense.gov/2026/Jun/15/2003948664/1200/1200/0/260615-F-F3205-1001.JPG",
+    "bio": "Matt's Flying TACON",
+    "managerId": "sle8yk5xi"
+  },
+  {
+    "id": "gkfsgkesy",
+    "name": "Gen. Ronald P. Clark",
+    "position": "Commander, US Army Pacific Command",
+    "pic": "https://media.defense.gov/2024/Nov/08/2003581262/600/400/0/241023-D-IF881-3002.JPG",
+    "bio": "",
+    "managerId": "jwl7ih7cw"
+  },
+  {
+    "id": "jwl7ih7cw",
+    "name": "Gen. Christopher LaNeve",
+    "position": "Chif of Staff of the Army",
+    "pic": "https://us-central1-menlo-view.menlosecurity.com/c/0/i/aHR0cHM6Ly91cGxvYWQud2lraW1lZGlhLm9yZy93aWtpcGVkaWEvY29tbW9ucy90aHVtYi9hL2E4L0dFTl9DaHJpc3RvcGhlcl9DLl9MYU5ldmUuanBnLzI1MHB4LUdFTl9DaHJpc3RvcGhlcl9DLl9MYU5ldmUuanBn",
+    "bio": "",
+    "managerId": "qhr4c2mz2"
+  },
+  {
+    "id": "3ly55jo88",
+    "name": "Lt. Gen. Matthew W. McFarlane",
+    "position": "Commander, I Corps",
+    "pic": "https://api.army.mil/e2/c/images/2025/01/23/fe1e5a39/max1200.jpg",
+    "bio": "Supported User",
+    "managerId": "gkfsgkesy"
+  },
+  {
+    "id": "4xdmr0i41",
+    "name": "Brig. Gen. Michele A. Lo Bianco",
+    "position": "Commander, 618th Air Operations Center",
+    "pic": "https://media.defense.gov/2026/Jun/08/2003945639/1200/1200/0/260608-F-DJ189-1001.JPG",
+    "bio": "TACON",
+    "managerId": "gdevu0d95"
+  },
+  {
+    "id": "3htfap3no",
+    "name": "Brig. Gen. Derek M. Salmi",
+    "position": "Director, Air Mobility Command A3/10",
+    "pic": "https://media.defense.gov/2023/Dec/21/2003364296/1200/1200/0/211223-F-AF000-0001.JPG",
+    "bio": "OPCON",
+    "managerId": "gdevu0d95"
+  },
+  {
+    "id": "iqj92qzac",
+    "name": "Col. Bret Echard",
+    "position": "Commander, 19th Airlift Wing",
+    "pic": "https://media.defense.gov/2025/Jul/08/2003749565/1200/1200/0/250708-F-BE660-0001.JPG",
+    "bio": "Tim's Flying TACON",
+    "managerId": "2"
+  }
+];
+
+  let orgData = [];
+  const defaultAvatarSVG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+
+  // Load from local storage, or fall back to the embedded array
+  function initData() {
+    const stored = localStorage.getItem('org_chart_data');
+    if (stored) {
+      try {
+        orgData = JSON.parse(stored);
+      } catch (e) {
+        orgData = [...defaultEmbeddedData];
+      }
+    } else {
+      orgData = [...defaultEmbeddedData];
+    }
+  }
+
+  function saveToStorage() {
+    localStorage.setItem('org_chart_data', JSON.stringify(orgData));
+  }
+
+  function generateId() {
+    return Math.random().toString(36).substr(2, 9);
+  }
+
+  function updateManagerSelect() {
+    const select = document.getElementById('manager');
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">No Manager (Root)</option>';
+    orgData.forEach(person => {
+      const opt = document.createElement('option');
+      opt.value = person.id;
+      opt.textContent = `${person.name} (${person.position})`;
+      select.appendChild(opt);
+    });
+    if (orgData.find(p => p.id === currentValue)) select.value = currentValue;
+  }
+
+  function addNode() {
+    const name = document.getElementById('name').value.trim();
+    const position = document.getElementById('position').value.trim();
+    const pic = document.getElementById('pic').value.trim();
+    const bio = document.getElementById('bio').value.trim();
+    let managerId = document.getElementById('manager').value;
+    
+    if (!name || !position) return alert("Please enter at least a Name and Position.");
+    
+    if (!managerId && orgData.some(p => !p.managerId)) {
+      if(!confirm("You are about to add another top-level manager. Continue?")) return;
+    }
+
+    orgData.push({ id: generateId(), name, position, pic, bio, managerId: managerId || null });
+    
+    document.getElementById('name').value = '';
+    document.getElementById('position').value = '';
+    document.getElementById('pic').value = '';
+    document.getElementById('bio').value = '';
+    
+    saveToStorage();
+    renderChart();
+  }
+  
+  function deleteNode(id) {
+    if(!confirm("Are you sure you want to remove this person? Their subordinates will be moved up a level.")) return;
+    const nodeToDelete = orgData.find(n => n.id === id);
+    if(!nodeToDelete) return;
+    
+    orgData.forEach(n => {
+        if(n.managerId === id) n.managerId = nodeToDelete.managerId;
+    });
+    
+    orgData = orgData.filter(n => n.id !== id);
+    saveToStorage();
+    renderChart();
+  }
+
+  /* Modal Logic */
+  function openEditModal(id) {
+    const person = orgData.find(n => n.id === id);
+    if (!person) return;
+    
+    document.getElementById('edit-id').value = person.id;
+    document.getElementById('edit-name').value = person.name;
+    document.getElementById('edit-position').value = person.position;
+    document.getElementById('edit-pic').value = person.pic || '';
+    document.getElementById('edit-bio').value = person.bio || '';
+    
+    document.getElementById('editDialog').showModal();
+  }
+
+  function closeEditModal() {
+    document.getElementById('editDialog').close();
+  }
+
+  function saveNodeEdit() {
+    const id = document.getElementById('edit-id').value;
+    const person = orgData.find(n => n.id === id);
+    if (!person) return;
+
+    const newName = document.getElementById('edit-name').value.trim();
+    const newPosition = document.getElementById('edit-position').value.trim();
+    
+    if (!newName || !newPosition) {
+      alert("Name and Position are required.");
+      return;
+    }
+
+    person.name = newName;
+    person.position = newPosition;
+    person.pic = document.getElementById('edit-pic').value.trim();
+    person.bio = document.getElementById('edit-bio').value.trim();
+
+    saveToStorage();
+    renderChart();
+    closeEditModal();
+  }
+
+  function buildTreeDOM(managerId) {
+    const children = orgData.filter(n => n.managerId === managerId);
+    if (children.length === 0) return null;
+
+    const ul = document.createElement('ul');
+    children.forEach(child => {
+      const li = document.createElement('li');
+      const nodeDiv = createNodeElement(child);
+      li.appendChild(nodeDiv);
+
+      const childrenDOM = buildTreeDOM(child.id);
+      if (childrenDOM) li.appendChild(childrenDOM);
+      
+      ul.appendChild(li);
+    });
+    
+    return ul;
+  }
+  
+  function createNodeElement(person) {
+    const nodeDiv = document.createElement('div');
+    nodeDiv.className = 'node';
+    nodeDiv.draggable = true;
+    nodeDiv.dataset.id = person.id;
+    
+    // Drag & Drop Handlers
+    nodeDiv.ondragstart = (e) => {
+      e.dataTransfer.setData('text/plain', person.id);
+    };
+    nodeDiv.ondragover = (e) => {
+      e.preventDefault();
+      nodeDiv.classList.add('drag-over');
+    };
+    nodeDiv.ondragleave = (e) => {
+      nodeDiv.classList.remove('drag-over');
+    };
+    nodeDiv.ondrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      nodeDiv.classList.remove('drag-over');
+      
+      const draggedId = e.dataTransfer.getData('text/plain');
+      if (draggedId && draggedId !== person.id) {
+        if (!isDescendant(person.id, draggedId)) {
+            const draggedNode = orgData.find(n => n.id === draggedId);
+            draggedNode.managerId = person.id;
+            saveToStorage();
+            renderChart();
+        } else {
+            alert("Action Prevented: Cannot move a manager to report to their own subordinate.");
+        }
+      }
+    };
+
+    // Avatar Setup (Fallback to inline Silhouette SVG)
+    const avatarBox = document.createElement('div');
+    avatarBox.className = 'avatar-box';
+    if (person.pic) {
+      const img = document.createElement('img');
+      img.src = person.pic;
+      img.onerror = () => { avatarBox.innerHTML = getSilhouetteSVG(); }; // Fallback on broken URL
+      avatarBox.appendChild(img);
+    } else {
+      avatarBox.innerHTML = getSilhouetteSVG();
+    }
+    
+    const h4 = document.createElement('h4');
+    h4.textContent = person.name;
+    
+    const pPos = document.createElement('p');
+    pPos.className = 'title';
+    pPos.textContent = person.position;
+    
+    const pBio = document.createElement('p');
+    pBio.className = 'bio';
+    pBio.textContent = person.bio;
+    
+    // Action Buttons
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-btn';
+    delBtn.innerHTML = '&times;';
+    delBtn.title = 'Remove Member';
+    delBtn.onclick = (e) => {
+      e.stopPropagation();
+      deleteNode(person.id);
+    };
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'edit-btn';
+    editBtn.innerHTML = '✏️';
+    editBtn.title = 'Edit Member';
+    editBtn.onclick = (e) => {
+      e.stopPropagation();
+      openEditModal(person.id);
+    };
+
+    nodeDiv.appendChild(delBtn);
+    nodeDiv.appendChild(editBtn);
+    nodeDiv.appendChild(avatarBox);
+    nodeDiv.appendChild(h4);
+    nodeDiv.appendChild(pPos);
+    nodeDiv.appendChild(pBio);
+    
+    return nodeDiv;
+  }
+
+  function getSilhouetteSVG() {
+    return `<svg class="silhouette" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
+  }
+  
+  function isDescendant(potentialChildId, potentialParentId) {
+      let currentId = potentialChildId;
+      while (currentId) {
+          if (currentId === potentialParentId) return true;
+          const node = orgData.find(n => n.id === currentId);
+          currentId = node ? node.managerId : null;
+      }
+      return false;
+  }
+
+  function renderChart() {
+    const container = document.getElementById('org-chart');
+    container.innerHTML = '';
+    
+    const roots = orgData.filter(n => !n.managerId || !orgData.find(p => p.id === n.managerId));
+    
+    if(roots.length > 0) {
+         const ul = document.createElement('ul');
+         roots.forEach(root => {
+             const li = document.createElement('li');
+             const nodeDiv = createNodeElement(root);
+             li.appendChild(nodeDiv);
+             
+             const childrenDOM = buildTreeDOM(root.id);
+             if (childrenDOM) li.appendChild(childrenDOM);
+             
+             ul.appendChild(li);
+         });
+         container.appendChild(ul);
+    }
+    
+    updateManagerSelect();
+  }
+
+  /* --- DATA CONSERVATION SYSTEMS --- */
+
+  // Injects current state JSON into the code and exports a new standalone HTML file
+  function exportSelfContainedHTML() {
+    const rawHTML = document.documentElement.outerHTML;
+    
+    const regex = /const defaultEmbeddedData = \[\s*[\s\S]*?\s*\];/;
+    const replacement = `const defaultEmbeddedData = ${JSON.stringify(orgData, null, 2)};`;
+    const updatedHTML = "<!DOCTYPE html>\n" + rawHTML.replace(regex, replacement);
+
+    const blob = new Blob([updatedHTML], { type: "text/html;charset=utf-8" });
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.href = URL.createObjectURL(blob);
+    downloadAnchor.download = "custom_organization_chart.html";
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  }
+
+  function exportJSON() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(orgData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "org_chart_backup.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  }
+
+  function triggerImport() {
+    document.getElementById('importFile').click();
+  }
+
+  function importJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        if (Array.isArray(importedData)) {
+          orgData = importedData;
+          saveToStorage();
+          renderChart();
+          alert("Backup data restored successfully!");
+        } else {
+          alert("Invalid file format. Make sure you select a valid JSON backup file.");
+        }
+      } catch (err) {
+        alert("Error loading file.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function resetToDemo() {
+    if(confirm("This will delete all progress and reset the chart. Are you sure?")) {
+      localStorage.removeItem('org_chart_data');
+      orgData = [...defaultEmbeddedData];
+      renderChart();
+    }
+  }
+
+  // Load and Run
+  initData();
+  renderChart();
+</script>
+
+
+</body></html>
